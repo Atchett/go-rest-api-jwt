@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"go-jwt/models"
+	"go-rest-api-jwt/models"
 )
 
 func respondWithError(w http.ResponseWriter, status int, error models.Error) {

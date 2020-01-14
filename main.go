@@ -9,11 +9,12 @@ import (
 	"os"
 	"strings"
 
+	"go-rest-api-jwt/driver"
+	"go-rest-api-jwt/models"
+
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/subosito/gotenv"
-	"go-jwt/driver"
-	"go-jwt/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
