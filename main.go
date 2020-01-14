@@ -2,24 +2,20 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 	"github.com/subosito/gotenv"
-	"go-rest-api-jwt/controllers"
-	"go-rest-api-jwt/driver"
-	"go-rest-api-jwt/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
-<<<<<<< HEAD
-var (
-	db *sql.DB
-	// removes the need for init
-	// https://medium.com/random-go-tips/init-without-init-ebf2f62e7c4a
-	_ = gotenv.Load()
-)
-=======
 // User - Models the user
 type User struct {
 	ID       int    `json:"id"`
@@ -37,28 +33,39 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-func init() {
-	gotenv.Load()
-}
-
-var db *sql.DB
->>>>>>> parent of 60be4e2... refactor to remove init
+var (
+	_  = gotenv.Load()
+	db *sql.DB
+)
 
 func main() {
 
-	db = driver.ConnectDB()
-	router := mux.NewRouter()
-	controller := controllers.Controller{}
+	pgURL, err := pq.ParseURL(os.Getenv("LOCAL_SQL_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	router.HandleFunc("/signup", controller.Signup(db)).Methods("POST")
-	router.HandleFunc("/login", controller.Login(db)).Methods("POST")
-	router.HandleFunc("/protected", utils.TokenVerifyMiddleware(controller.Protected(db))).Methods("GET")
+	db, err = sql.Open("postgres", pgURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	router := mux.NewRouter()
+	router.HandleFunc("/signup", signup).Methods("POST")
+	router.HandleFunc("/login", login).Methods("POST")
+	router.HandleFunc("/protected", TokenVerifyMiddleware(protectedEndpoint)).Methods("GET")
+	router.HandleFunc("/app", TokenVerifyMiddleware(app)).Methods("GET")
+	router.HandleFunc("/some", TokenVerifyMiddleware(some)).Methods("GET")
+	router.HandleFunc("/cantsee", TokenVerifyMiddleware(cantsee)).Methods("GET")
 
 	log.Println("Listen on port 8000....")
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
-<<<<<<< HEAD
-=======
 
 func respondWithError(w http.ResponseWriter, status int, error Error) {
 	w.WriteHeader(status)
@@ -114,7 +121,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateToken(user User) (string, error) {
-	secret := "secret"
+	secret := os.Getenv("APP_SECRET")
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": user.Email,
@@ -190,7 +197,7 @@ func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("There was an error")
 				}
-				return []byte("secret"), nil
+				return []byte(os.Getenv("APP_SECRET")), nil
 			})
 
 			if err != nil {
@@ -231,4 +238,3 @@ func some(w http.ResponseWriter, r *http.Request) {
 func cantsee(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("cantsee")
 }
->>>>>>> parent of 60be4e2... refactor to remove init
