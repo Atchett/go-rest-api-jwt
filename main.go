@@ -33,11 +33,16 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-func init() {
-	gotenv.Load()
-}
+// func init() {
+// 	gotenv.Load()
+// }
 
-var db *sql.DB
+var (
+	db *sql.DB
+	// removes the need for init
+	// https://medium.com/random-go-tips/init-without-init-ebf2f62e7c4a
+	_ = gotenv.Load()
+)
 
 func main() {
 
@@ -122,7 +127,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateToken(user User) (string, error) {
-	secret := "secret"
+	secret := os.Getenv("APP_SECRET")
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": user.Email,
@@ -198,7 +203,7 @@ func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("There was an error")
 				}
-				return []byte("secret"), nil
+				return []byte(os.Getenv("APP_SECRET")), nil
 			})
 
 			if err != nil {
