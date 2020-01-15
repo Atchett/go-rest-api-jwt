@@ -7,9 +7,6 @@ import (
 	"github.com/atchett/go-rest-api-jwt/utils"
 )
 
-// UserRepository - empty struct for methods
-type UserRepository struct{}
-
 // Signup - interacts with the database to signup the user
 func (u UserRepository) Signup(db *sql.DB, user models.User) models.User {
 

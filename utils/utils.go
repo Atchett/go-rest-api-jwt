@@ -2,14 +2,13 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/atchett/go-rest-api-jwt/models"
 	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // RespondWithError - sends the error back to the client
@@ -52,41 +51,13 @@ func GenerateToken(user models.User) (string, error) {
 
 }
 
-// TokenVerifyMiddleware - validates the token - gives access to protected
-func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var errObj models.Error
-		authHeader := r.Header.Get("Authorization")
-		bearerToken := strings.Split(authHeader, " ")
+// ComparePasswords - wrapper function to compare hashed pwds
+func ComparePasswords(hashedPassword []byte, password []byte) bool {
+	err := bcrypt.CompareHashAndPassword(hashedPassword, password)
+	if err != nil {
+		LogToTerm("Invalid password")
+		return false
+	}
+	return true
 
-		if len(bearerToken) == 2 {
-			authToken := bearerToken[1]
-			token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("There was an error")
-				}
-				return []byte(os.Getenv("APP_SECRET")), nil
-			})
-
-			if err != nil {
-				errObj.Message = err.Error()
-				RespondWithError(w, http.StatusUnauthorized, errObj)
-				return
-			}
-
-			if token.Valid {
-				// invoke function getting called on
-				// in this case the protected endpoint function handler
-				next.ServeHTTP(w, r)
-			} else {
-				errObj.Message = err.Error()
-				RespondWithError(w, http.StatusUnauthorized, errObj)
-				return
-			}
-		} else {
-			errObj.Message = "Invalid Token"
-			RespondWithError(w, http.StatusUnauthorized, errObj)
-			return
-		}
-	})
 }

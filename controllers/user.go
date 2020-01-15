@@ -4,19 +4,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/atchett/go-rest-api-jwt/models"
 	userRepository "github.com/atchett/go-rest-api-jwt/repository/user"
 	"github.com/atchett/go-rest-api-jwt/utils"
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var users []models.User
-
-// Controller - empty struct to contain the methods
-type Controller struct{}
 
 // Login - allows the user to login
 func (c Controller) Login(db *sql.DB) http.HandlerFunc {
@@ -42,9 +41,6 @@ func (c Controller) Login(db *sql.DB) http.HandlerFunc {
 
 		userRepo := userRepository.UserRepository{}
 		user, err := userRepo.Login(db, user)
-
-		log.Println(err)
-
 		if err != nil {
 			if err == sql.ErrNoRows {
 				error.Message = "The user does not exist"
@@ -55,21 +51,20 @@ func (c Controller) Login(db *sql.DB) http.HandlerFunc {
 		}
 
 		hashPwd := user.Password
-
-		err = bcrypt.CompareHashAndPassword([]byte(hashPwd), []byte(pwd))
-		if err != nil {
-			error.Message = "Invalid password"
-			utils.RespondWithError(w, http.StatusBadRequest, error)
-			return
-		}
 		token, err := utils.GenerateToken(user)
 		if err != nil {
 			utils.LogFatal(err)
 		}
-		w.WriteHeader(http.StatusOK)
-		jwt.Token = token
 
-		utils.ResponseJSON(w, jwt)
+		isValidPassword := utils.ComparePasswords([]byte(hashPwd), []byte(pwd))
+		if isValidPassword {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Authorization", token)
+			jwt.Token = token
+			utils.ResponseJSON(w, jwt)
+		}
+
 	}
 }
 
@@ -116,4 +111,44 @@ func (c Controller) Signup(db *sql.DB) http.HandlerFunc {
 		utils.ResponseJSON(w, user)
 
 	}
+}
+
+// TokenVerifyMiddleware - validates the token - gives access to protected endpoints
+func (c Controller) TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var errObj models.Error
+		authHeader := r.Header.Get("Authorization")
+		bearerToken := strings.Split(authHeader, " ")
+
+		if len(bearerToken) == 2 {
+			authToken := bearerToken[1]
+			token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("There was an error")
+				}
+				return []byte(os.Getenv("APP_SECRET")), nil
+			})
+
+			if err != nil {
+				errObj.Message = err.Error()
+				utils.RespondWithError(w, http.StatusUnauthorized, errObj)
+				return
+			}
+
+			if token.Valid {
+				// invoke function getting called on
+				// in this case the protected endpoint function handler
+				next.ServeHTTP(w, r)
+			} else {
+				errObj.Message = err.Error()
+				utils.RespondWithError(w, http.StatusUnauthorized, errObj)
+				return
+			}
+		} else {
+			errObj.Message = "Invalid Token"
+			utils.RespondWithError(w, http.StatusUnauthorized, errObj)
+			return
+		}
+	})
 }
